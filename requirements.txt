@@ -1,0 +1,1 @@
+PyYAML>=6.0 # Or a specific version if preferred

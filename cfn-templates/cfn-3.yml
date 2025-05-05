@@ -1,0 +1,81 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: EventBridge Rule triggering Lambda
+
+Parameters:
+  Stage:
+    Type: String
+    Default: Dev
+
+Resources:
+  # --- Event Bus (Optional - could use default) ---
+  MyCustomEventBus:
+    Type: AWS::Events::EventBus
+    Properties:
+      Name: !Sub "MyCustomBus-${Stage}"
+
+  # --- Target Lambda ---
+  EventProcessorLambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+
+  EventProcessorLambda:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub "EventProcessor-${Stage}"
+      Handler: index.handler
+      Role: !GetAtt EventProcessorLambdaRole.Arn
+      Runtime: python3.9
+      Code:
+        ZipFile: |
+          import json
+          def handler(event, context):
+              print("Received event:")
+              print(json.dumps(event, indent=2))
+              # Process the event
+              return {'status': 'processed'}
+
+  # --- EventBridge Rule ---
+  MyEventRule:
+    Type: AWS::Events::Rule
+    Properties:
+      Name: !Sub "MyEventTriggerRule-${Stage}"
+      Description: "Rule to trigger Lambda on custom events"
+      EventBusName: !Ref MyCustomEventBus
+      EventPattern:
+        source:
+          - "my.application"
+        detail-type:
+          - "OrderCreated"
+      State: ENABLED
+      Targets:
+        - Arn: !GetAtt EventProcessorLambda.Arn
+          Id: "EventProcessorLambdaTarget"
+
+  # --- Lambda Permission for EventBridge ---
+  LambdaEventBridgePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !Ref EventProcessorLambda # Can use Ref or GetAtt.Arn
+      Principal: events.amazonaws.com
+      SourceArn: !GetAtt MyEventRule.Arn # Give permission specific to this rule
+
+Outputs:
+  EventBusName:
+    Description: Name of the custom EventBus
+    Value: !Ref MyCustomEventBus
+  RuleName:
+    Description: Name of the EventBridge Rule
+    Value: !Ref MyEventRule
+  LambdaFunctionName:
+    Description: Name of the target Lambda function
+    Value: !Ref EventProcessorLambda 

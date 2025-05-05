@@ -1,0 +1,164 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Sample CloudFormation template for parser testing
+
+Parameters:
+  ProjectName:
+    Type: String
+    Default: ResourceExplorer
+  Stage:
+    Type: String
+    Default: Dev
+
+Resources:
+  # --- Lambda Function ---
+  MyLambdaFunctionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: LambdaBasicExecution
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: '*' # Simplified for example
+              - Effect: Allow # Allow access to DDB and SQS
+                Action:
+                  - dynamodb:GetItem
+                  - dynamodb:PutItem
+                  - sqs:SendMessage
+                Resource:
+                  - !GetAtt MyDynamoDBTable.Arn
+                  - !GetAtt MySqsQueue.Arn
+
+  MyLambdaFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub "${ProjectName}-MyFunction-${Stage}"
+      Handler: index.handler
+      Role: !GetAtt MyLambdaFunctionRole.Arn
+      Runtime: python3.9
+      Code:
+        ZipFile: |
+          import os
+          import boto3
+          import json
+
+          ddb_table_name = os.environ['DDB_TABLE_NAME']
+          sqs_queue_url = os.environ['SQS_QUEUE_URL']
+          # dynamodb = boto3.resource('dynamodb')
+          # sqs = boto3.client('sqs')
+
+          def handler(event, context):
+              print(f"Accessing table: {ddb_table_name}")
+              print(f"Accessing queue: {sqs_queue_url}")
+              # Example: Use ddb_table_name and sqs_queue_url
+              # sqs.send_message(QueueUrl=sqs_queue_url, MessageBody=json.dumps({'status': 'processed'}))
+              return {
+                  'statusCode': 200,
+                  'body': json.dumps('Hello from Lambda!')
+              }
+      Environment:
+        Variables:
+          DDB_TABLE_NAME: !Ref MyDynamoDBTable # Reference to DynamoDB table
+          SQS_QUEUE_URL: !Ref MySqsQueue     # Reference to SQS Queue
+
+  LambdaApiPermission:
+      Type: AWS::Lambda::Permission
+      Properties:
+          Action: lambda:InvokeFunction
+          FunctionName: !GetAtt MyLambdaFunction.Arn
+          Principal: apigateway.amazonaws.com
+          SourceArn: !Sub "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${MyApiGateway}/*/*/*"
+
+  # --- API Gateway ---
+  MyApiGateway:
+    Type: AWS::ApiGateway::RestApi
+    Properties:
+      Name: !Sub "${ProjectName}-API-${Stage}"
+      Description: API for MyLambdaFunction
+
+  MyApiResource:
+      Type: AWS::ApiGateway::Resource
+      Properties:
+          ParentId: !GetAtt MyApiGateway.RootResourceId
+          PathPart: process
+          RestApiId: !Ref MyApiGateway
+
+  MyApiMethod:
+      Type: AWS::ApiGateway::Method
+      Properties:
+          HttpMethod: POST
+          ResourceId: !Ref MyApiResource
+          RestApiId: !Ref MyApiGateway
+          AuthorizationType: NONE
+          Integration:
+              Type: AWS_PROXY
+              IntegrationHttpMethod: POST
+              Uri: !Sub "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${MyLambdaFunction.Arn}/invocations" # Reference to Lambda Function
+
+  MyApiDeployment:
+      Type: AWS::ApiGateway::Deployment
+      DependsOn: MyApiMethod
+      Properties:
+          RestApiId: !Ref MyApiGateway
+          # StageName: !Ref Stage # Use Stage resource if defined, else hardcode
+
+  # --- DynamoDB Table ---
+  MyDynamoDBTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub "${ProjectName}-Items-${Stage}"
+      AttributeDefinitions:
+        - AttributeName: id
+          AttributeType: S
+      KeySchema:
+        - AttributeName: id
+          KeyType: HASH
+      BillingMode: PAY_PER_REQUEST
+
+  # --- SQS Queue ---
+  MySqsQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: !Sub "${ProjectName}-MyQueue-${Stage}.fifo"
+      FifoQueue: true
+      ContentBasedDeduplication: true
+
+  # --- S3 Bucket (Example - no direct invocation shown here) ---
+  MyS3Bucket:
+      Type: AWS::S3::Bucket
+      Properties:
+          BucketName: !Sub "${ProjectName}-my-data-bucket-${AWS::AccountId}-${Stage}"
+          PublicAccessBlockConfiguration:
+              BlockPublicAcls: true
+              BlockPublicPolicy: true
+              IgnorePublicAcls: true
+              RestrictPublicBuckets: true
+
+Outputs:
+  ApiEndpoint:
+    Description: Endpoint URL for the API Gateway
+    Value: !Sub "https://${MyApiGateway}.execute-api.${AWS::Region}.amazonaws.com/${Stage}/process" # Assumes Stage is used in Deployment
+  LambdaFunctionName:
+    Description: Name of the Lambda function
+    Value: !Ref MyLambdaFunction
+  DynamoDBTableName:
+    Description: Name of the DynamoDB table
+    Value: !Ref MyDynamoDBTable
+  SqsQueueUrl:
+    Description: URL of the SQS queue
+    Value: !Ref MySqsQueue
+  S3BucketName:
+      Description: Name of the S3 bucket
+      Value: !Ref MyS3Bucket 

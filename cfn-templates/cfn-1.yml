@@ -1,0 +1,129 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Template demonstrating a chain of Lambda invocations for parser testing
+
+Parameters:
+  Stage:
+    Type: String
+    Default: Test
+
+Resources:
+  # --- Lambda A --- (Invokes Lambda B)
+  RoleForLambdaA:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: InvokeLambdaBPolicy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action: lambda:InvokeFunction
+                Resource: !GetAtt LambdaB.Arn # Permission to invoke Lambda B
+
+  LambdaA:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub "ChainLambdaA-${Stage}"
+      Handler: index.handler
+      Role: !GetAtt RoleForLambdaA.Arn
+      Runtime: python3.9
+      Code:
+        ZipFile: |
+          import os, boto3, json
+          LAMBDA_B_NAME = os.environ['LAMBDA_B_NAME']
+          lambda_client = boto3.client('lambda')
+          def handler(event, context):
+              print(f'Lambda A invoking {LAMBDA_B_NAME}')
+              response = lambda_client.invoke(FunctionName=LAMBDA_B_NAME, Payload=json.dumps(event))
+              payload = json.loads(response['Payload'].read())
+              return payload
+      Environment:
+        Variables:
+          LAMBDA_B_NAME: !Ref LambdaB # Reference for code
+
+  # --- Lambda B --- (Invoked by A, Invokes Lambda C)
+  RoleForLambdaB:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: InvokeLambdaCPolicy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action: lambda:InvokeFunction
+                Resource: !GetAtt LambdaC.Arn # Permission to invoke Lambda C
+
+  LambdaB:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub "ChainLambdaB-${Stage}"
+      Handler: index.handler
+      Role: !GetAtt RoleForLambdaB.Arn
+      Runtime: python3.9
+      Code:
+        ZipFile: |
+          import os, boto3, json
+          LAMBDA_C_NAME = os.environ['LAMBDA_C_NAME']
+          lambda_client = boto3.client('lambda')
+          def handler(event, context):
+              print(f'Lambda B invoking {LAMBDA_C_NAME}')
+              response = lambda_client.invoke(FunctionName=LAMBDA_C_NAME, Payload=json.dumps(event))
+              payload = json.loads(response['Payload'].read())
+              return payload
+      Environment:
+        Variables:
+          LAMBDA_C_NAME: !Ref LambdaC # Reference for code
+
+  # --- Lambda C --- (Invoked by B)
+  RoleForLambdaC:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+
+  LambdaC:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub "ChainLambdaC-${Stage}"
+      Handler: index.handler
+      Role: !GetAtt RoleForLambdaC.Arn
+      Runtime: python3.9
+      Code:
+        ZipFile: |
+          def handler(event, context):
+              print('Lambda C reached!')
+              return {**event, 'c_status': 'Reached End'}
+
+Outputs:
+  LambdaAName:
+    Value: !Ref LambdaA
+  LambdaBName:
+    Value: !Ref LambdaB
+  LambdaCName:
+    Value: !Ref LambdaC 
