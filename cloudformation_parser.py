@@ -30,28 +30,29 @@ yaml.add_multi_constructor('!', default_constructor, Loader=yaml.SafeLoader)
 
 # --- Resource Type Mapping ---
 CFN_TYPE_MAP = {
-    "AWS::Lambda::Function": "Lambda Function",
-    "AWS::DynamoDB::Table": "DynamoDB Table",
-    "AWS::SQS::Queue": "SQS Queue",
-    "AWS::ApiGateway::RestApi": "API Gateway",
-    "AWS::ApiGateway::Resource": "API Gateway Resource",
-    "AWS::ApiGateway::Method": "API Gateway Method",
-    "AWS::ApiGateway::Deployment": "API Gateway Deployment",
-    "AWS::S3::Bucket": "S3 Bucket",
-    "AWS::IAM::Role": "IAM Role",
-    "AWS::IAM::Policy": "IAM Policy",
-    "AWS::Events::Rule": "EventBridge Rule",
-    "AWS::Events::EventBus": "EventBridge Bus",
-    "AWS::StepFunctions::StateMachine": "Step Function",
-    "AWS::Lambda::EventSourceMapping": "Lambda Event Source Mapping",
-    "AWS::RDS::DBInstance": "RDS DB Instance",
-    "AWS::EC2::SecurityGroup": "Security Group",
-    "AWS::AppSync::GraphQLApi": "AppSync API",
-    "AWS::AppSync::DataSource": "AppSync DataSource",
-    "AWS::AppSync::Resolver": "AppSync Resolver",
-    "AWS::AppSync::GraphQLSchema": "AppSync Schema",
-    "AWS::AppSync::ApiKey": "AppSync ApiKey",
-    "AWS::Lambda::Permission": "Lambda Permission",
+    # "AWS::Lambda::Function": "Lambda Function",
+    # "AWS::Serverless::Function": "Lambda Function (SAM)",
+    # "AWS::DynamoDB::Table": "DynamoDB Table",
+    # "AWS::SQS::Queue": "SQS Queue",
+    # "AWS::ApiGateway::RestApi": "API Gateway",
+    # "AWS::ApiGateway::Resource": "API Gateway Resource",
+    # "AWS::ApiGateway::Method": "API Gateway Method",
+    # "AWS::ApiGateway::Deployment": "API Gateway Deployment",
+    # "AWS::S3::Bucket": "S3 Bucket",
+    # "AWS::IAM::Role": "IAM Role",
+    # "AWS::IAM::Policy": "IAM Policy",
+    # "AWS::Events::Rule": "EventBridge Rule",
+    # "AWS::Events::EventBus": "EventBridge Bus",
+    # "AWS::StepFunctions::StateMachine": "Step Function",
+    # "AWS::Lambda::EventSourceMapping": "Lambda Event Source Mapping",
+    # "AWS::RDS::DBInstance": "RDS DB Instance",
+    # "AWS::EC2::SecurityGroup": "Security Group",
+    # "AWS::AppSync::GraphQLApi": "AppSync API",
+    # "AWS::AppSync::DataSource": "AppSync DataSource",
+    # "AWS::AppSync::Resolver": "AppSync Resolver",
+    # "AWS::AppSync::GraphQLSchema": "AppSync Schema",
+    # "AWS::AppSync::ApiKey": "AppSync ApiKey",
+    # "AWS::Lambda::Permission": "Lambda Permission",
     # Add more mappings as needed
 }
 
@@ -121,7 +122,7 @@ def parse_cloudformation(template_path, account_name):
 
     resources = template['Resources']
     defined_logical_ids = set(resources.keys())
-    parsed_relations = defaultdict(lambda: {"invokes": set(), "invoked_by": set()})
+    parsed_relations = defaultdict(lambda: {"invokes": set(), "invoked_by": set(), "invoked_by_external": set()})
 
     # First pass: Initialize basic info and identify potential invocations
     print("Parsing resources and identifying potential invocations...")
@@ -131,6 +132,7 @@ def parse_cloudformation(template_path, account_name):
 
         parsed_relations[logical_id]['type'] = display_type
         parsed_relations[logical_id]['account_name'] = account_name
+        parsed_relations[logical_id]['invoked_by_external'] = set() # Explicitly initialize, though defaultdict does it
 
         properties = resource_details.get('Properties', {})
 
@@ -172,6 +174,33 @@ def parse_cloudformation(template_path, account_name):
                                      if target_lambda_id in resources and resources[target_lambda_id].get('Type') == "AWS::Lambda::Function":
                                          print(f"  {logical_id} (Lambda via Role Invoke) -> {target_lambda_id}")
                                          parsed_relations[logical_id]['invokes'].add(target_lambda_id)
+
+        # NEW: Handle SAM Serverless Function Events shorthand
+        elif cfn_type == "AWS::Serverless::Function":
+            # First, handle standard property references like Environment Variables
+            env_vars = properties.get('Environment', {}).get('Variables', {})
+            refs_in_env = find_logical_ids(env_vars, defined_logical_ids)
+            for ref_id in refs_in_env:
+                print(f"  {logical_id} (SAM Function Env) -> {ref_id}")
+                parsed_relations[logical_id]['invokes'].add(ref_id)
+
+            # Now, check for the SAM 'Events' property
+            events = properties.get('Events', {})
+            for event_name, event_details in events.items():
+                event_type = event_details.get('Type')
+                event_props = event_details.get('Properties', {})
+
+                if event_type == 'SQS':
+                    queue_ref = event_props.get('Queue')
+                    queue_ids = find_logical_ids(queue_ref, defined_logical_ids)
+                    if queue_ids:
+                        queue_logical_id = list(queue_ids)[0] # Assuming one queue ID found
+                        # The SQS Queue invokes this Lambda function
+                        print(f"  {queue_logical_id} (SQS Event Source for SAM) -> {logical_id}")
+                        parsed_relations[queue_logical_id]['invokes'].add(logical_id)
+                    else:
+                         print(f"  Warning: Could not resolve SQS Queue reference '{queue_ref}' for SAM Function '{logical_id}' event '{event_name}'.")
+                # TODO: Add handlers for other SAM Event types (API, Schedule, S3, etc.) if needed
 
         elif cfn_type == "AWS::ApiGateway::Method":
             # Integration Uri likely means API GW Method -> Target (usually Lambda)
@@ -226,6 +255,33 @@ def parse_cloudformation(template_path, account_name):
                 print(f"  {source_id} (Event Source) -> {func_id}")
                 parsed_relations[source_id]['invokes'].add(func_id)
                 # The mapping resource itself doesn't really invoke/get invoked in our model
+
+        elif cfn_type == "AWS::Lambda::Permission":
+            # Handles permissions granted to other services to invoke this lambda
+            principal = properties.get('Principal')
+            func_ref = properties.get('FunctionName')
+            func_ids = find_logical_ids(func_ref, defined_logical_ids)
+
+            if func_ids:
+                target_lambda_id = list(func_ids)[0] # Assume one function target
+                invoker_service = None
+                if principal == 's3.amazonaws.com':
+                    invoker_service = 'S3'
+                elif principal == 'events.amazonaws.com':
+                    invoker_service = 'EventBridge'
+                elif principal == 'apigateway.amazonaws.com':
+                    invoker_service = 'API Gateway'
+                elif principal == 'sqs.amazonaws.com': # Example: If Lambda directly polls SQS via permission?
+                     invoker_service = 'SQS'
+                # Add other service principals as needed
+
+                if invoker_service:
+                    print(f"  {invoker_service} (via Permission) -> {target_lambda_id}")
+                    # Add to the target lambda's external invokers
+                    if target_lambda_id in parsed_relations:
+                        parsed_relations[target_lambda_id]['invoked_by_external'].add(invoker_service)
+                    else:
+                         print(f"  Warning: Target Lambda '{target_lambda_id}' for permission not found in parsed definitions.")
 
         elif cfn_type == "AWS::AppSync::DataSource":
             # Links AppSync API to Lambda or DDB
@@ -282,7 +338,8 @@ def parse_cloudformation(template_path, account_name):
             "type": data['type'],
             "account_name": data['account_name'],
             "invokes": final_invokes,
-            "invoked_by": [] # Placeholder, will be populated next
+            "invoked_by": [], # Placeholder, will be populated next
+            "invoked_by_external": sorted(list(data.get('invoked_by_external', set()))) # Add external invokers
         }
 
     # Populate final invoked_by lists with details
@@ -336,9 +393,22 @@ def load_existing_data(data_file_path):
 def write_data_file(relations, output_path="resources.json"):
     """Writes the relations dictionary to the specified JSON file."""
     print(f"Writing combined data to {output_path}...")
+    # Convert sets to lists for JSON serialization before writing
+    output_data = {}
+    for logical_id, data in relations.items():
+        output_data[logical_id] = data.copy()
+        if 'invokes' in output_data[logical_id]: # Should always be there
+             # Already list of dicts
+             pass
+        if 'invoked_by' in output_data[logical_id]: # Should always be there
+             # Already list of dicts
+             pass
+        if 'invoked_by_external' in output_data[logical_id]:
+             output_data[logical_id]['invoked_by_external'] = sorted(list(output_data[logical_id]['invoked_by_external']))
+
     try:
         with open(output_path, 'w') as f:
-            json.dump(relations, f, indent=4)
+            json.dump(output_data, f, indent=4) # Write the converted data
         print(f"Successfully wrote data to {output_path}.")
     except IOError as e:
         print(f"Error writing to file {output_path}: {e}", file=sys.stderr)

@@ -1,429 +1,51 @@
 {
-    "RoleForLambdaA": {
-        "type": "IAM Role",
+    "TDGPlannedOutageMessageHandlerLambdaFunction": {
+        "type": "AWS::Serverless::Function",
         "account_name": "aws-1",
         "invokes": [],
-        "invoked_by": []
+        "invoked_by": [],
+        "invoked_by_external": [
+            "S3"
+        ]
     },
-    "LambdaA": {
-        "type": "Lambda Function",
+    "LambdaInvokePermission": {
+        "type": "AWS::Lambda::Permission",
         "account_name": "aws-1",
-        "invokes": [
+        "invokes": [],
+        "invoked_by": [],
+        "invoked_by_external": []
+    },
+    "TDGPlannedOutageSendReportLambda": {
+        "type": "AWS::Serverless::Function",
+        "account_name": "aws-1",
+        "invokes": [],
+        "invoked_by": [
             {
-                "name": "LambdaB",
-                "type": "Lambda Function",
+                "name": "TDGPlannedOutageSendReportSQS",
+                "type": "AWS::SQS::Queue",
                 "account_name": "aws-1"
             }
         ],
-        "invoked_by": []
+        "invoked_by_external": []
     },
-    "RoleForLambdaB": {
-        "type": "IAM Role",
-        "account_name": "aws-1",
-        "invokes": [],
-        "invoked_by": []
-    },
-    "LambdaB": {
-        "type": "Lambda Function",
+    "TDGPlannedOutageSendReportSQS": {
+        "type": "AWS::SQS::Queue",
         "account_name": "aws-1",
         "invokes": [
             {
-                "name": "LambdaC",
-                "type": "Lambda Function",
+                "name": "TDGPlannedOutageSendReportLambda",
+                "type": "AWS::Serverless::Function",
                 "account_name": "aws-1"
             }
         ],
-        "invoked_by": [
-            {
-                "name": "LambdaA",
-                "type": "Lambda Function",
-                "account_name": "aws-1"
-            }
-        ]
+        "invoked_by": [],
+        "invoked_by_external": []
     },
-    "RoleForLambdaC": {
-        "type": "IAM Role",
+    "TDGPlannedOutageSendReportSQSEventPolicy": {
+        "type": "AWS::SQS::QueuePolicy",
         "account_name": "aws-1",
         "invokes": [],
-        "invoked_by": []
-    },
-    "LambdaC": {
-        "type": "Lambda Function",
-        "account_name": "aws-1",
-        "invokes": [],
-        "invoked_by": [
-            {
-                "name": "LambdaB",
-                "type": "Lambda Function",
-                "account_name": "aws-1"
-            }
-        ]
-    },
-    "ItemsTable": {
-        "type": "DynamoDB Table",
-        "account_name": "aws-2",
-        "invokes": [],
-        "invoked_by": [
-            {
-                "name": "DynamoDBDataSource",
-                "type": "AppSync DataSource",
-                "account_name": "aws-2"
-            },
-            {
-                "name": "ItemResolverLambda",
-                "type": "Lambda Function",
-                "account_name": "aws-2"
-            }
-        ]
-    },
-    "AppSyncServiceRole": {
-        "type": "IAM Role",
-        "account_name": "aws-2",
-        "invokes": [],
-        "invoked_by": []
-    },
-    "ItemResolverLambdaRole": {
-        "type": "IAM Role",
-        "account_name": "aws-2",
-        "invokes": [],
-        "invoked_by": []
-    },
-    "ItemResolverLambda": {
-        "type": "Lambda Function",
-        "account_name": "aws-2",
-        "invokes": [
-            {
-                "name": "ItemsTable",
-                "type": "DynamoDB Table",
-                "account_name": "aws-2"
-            }
-        ],
-        "invoked_by": [
-            {
-                "name": "LambdaDataSource",
-                "type": "AppSync DataSource",
-                "account_name": "aws-2"
-            }
-        ]
-    },
-    "MyGraphQLApi": {
-        "type": "AppSync API",
-        "account_name": "aws-2",
-        "invokes": [],
-        "invoked_by": []
-    },
-    "MyApiKey": {
-        "type": "AppSync ApiKey",
-        "account_name": "aws-2",
-        "invokes": [],
-        "invoked_by": []
-    },
-    "MyGraphQLSchema": {
-        "type": "AppSync Schema",
-        "account_name": "aws-2",
-        "invokes": [],
-        "invoked_by": []
-    },
-    "LambdaDataSource": {
-        "type": "AppSync DataSource",
-        "account_name": "aws-2",
-        "invokes": [
-            {
-                "name": "ItemResolverLambda",
-                "type": "Lambda Function",
-                "account_name": "aws-2"
-            }
-        ],
-        "invoked_by": []
-    },
-    "DynamoDBDataSource": {
-        "type": "AppSync DataSource",
-        "account_name": "aws-2",
-        "invokes": [
-            {
-                "name": "ItemsTable",
-                "type": "DynamoDB Table",
-                "account_name": "aws-2"
-            }
-        ],
-        "invoked_by": []
-    },
-    "GetItemResolver": {
-        "type": "AppSync Resolver",
-        "account_name": "aws-2",
-        "invokes": [],
-        "invoked_by": []
-    },
-    "AddItemResolver": {
-        "type": "AppSync Resolver",
-        "account_name": "aws-2",
-        "invokes": [],
-        "invoked_by": []
-    },
-    "MyCustomEventBus": {
-        "type": "EventBridge Bus",
-        "account_name": "aws-3",
-        "invokes": [],
-        "invoked_by": []
-    },
-    "EventProcessorLambdaRole": {
-        "type": "IAM Role",
-        "account_name": "aws-3",
-        "invokes": [],
-        "invoked_by": []
-    },
-    "EventProcessorLambda": {
-        "type": "Lambda Function",
-        "account_name": "aws-3",
-        "invokes": [],
-        "invoked_by": [
-            {
-                "name": "MyEventRule",
-                "type": "EventBridge Rule",
-                "account_name": "aws-3"
-            }
-        ]
-    },
-    "MyEventRule": {
-        "type": "EventBridge Rule",
-        "account_name": "aws-3",
-        "invokes": [
-            {
-                "name": "EventProcessorLambda",
-                "type": "Lambda Function",
-                "account_name": "aws-3"
-            }
-        ],
-        "invoked_by": []
-    },
-    "LambdaEventBridgePermission": {
-        "type": "Lambda Permission",
-        "account_name": "aws-3",
-        "invokes": [],
-        "invoked_by": []
-    },
-    "LambdaSecurityGroup": {
-        "type": "Security Group",
-        "account_name": "aws-4",
-        "invokes": [],
-        "invoked_by": []
-    },
-    "DbSecurityGroup": {
-        "type": "Security Group",
-        "account_name": "aws-4",
-        "invokes": [],
-        "invoked_by": []
-    },
-    "MyDatabase": {
-        "type": "RDS DB Instance",
-        "account_name": "aws-4",
-        "invokes": [],
-        "invoked_by": [
-            {
-                "name": "DbLambdaFunction",
-                "type": "Lambda Function",
-                "account_name": "aws-4"
-            }
-        ]
-    },
-    "DbLambdaRole": {
-        "type": "IAM Role",
-        "account_name": "aws-4",
-        "invokes": [],
-        "invoked_by": []
-    },
-    "DbLambdaFunction": {
-        "type": "Lambda Function",
-        "account_name": "aws-4",
-        "invokes": [
-            {
-                "name": "MyDatabase",
-                "type": "RDS DB Instance",
-                "account_name": "aws-4"
-            }
-        ],
-        "invoked_by": []
-    },
-    "ProcessingQueue": {
-        "type": "SQS Queue",
-        "account_name": "aws-5",
-        "invokes": [
-            {
-                "name": "SqsConsumerLambda",
-                "type": "Lambda Function",
-                "account_name": "aws-5"
-            }
-        ],
-        "invoked_by": []
-    },
-    "SqsConsumerLambdaRole": {
-        "type": "IAM Role",
-        "account_name": "aws-5",
-        "invokes": [],
-        "invoked_by": []
-    },
-    "SqsConsumerLambda": {
-        "type": "Lambda Function",
-        "account_name": "aws-5",
-        "invokes": [],
-        "invoked_by": [
-            {
-                "name": "ProcessingQueue",
-                "type": "SQS Queue",
-                "account_name": "aws-5"
-            }
-        ]
-    },
-    "LambdaSqsEventSourceMapping": {
-        "type": "Lambda Event Source Mapping",
-        "account_name": "aws-5",
-        "invokes": [],
-        "invoked_by": []
-    },
-    "StatesExecutionRole": {
-        "type": "IAM Role",
-        "account_name": "aws-1",
-        "invokes": [],
-        "invoked_by": []
-    },
-    "FirstLambdaRole": {
-        "type": "IAM Role",
-        "account_name": "aws-1",
-        "invokes": [],
-        "invoked_by": []
-    },
-    "FirstLambdaFunction": {
-        "type": "Lambda Function",
-        "account_name": "aws-1",
-        "invokes": [],
-        "invoked_by": [
-            {
-                "name": "MyStateMachine",
-                "type": "Step Function",
-                "account_name": "aws-1"
-            }
-        ]
-    },
-    "SecondLambdaRole": {
-        "type": "IAM Role",
-        "account_name": "aws-1",
-        "invokes": [],
-        "invoked_by": []
-    },
-    "SecondLambdaFunction": {
-        "type": "Lambda Function",
-        "account_name": "aws-1",
-        "invokes": [],
-        "invoked_by": [
-            {
-                "name": "MyStateMachine",
-                "type": "Step Function",
-                "account_name": "aws-1"
-            }
-        ]
-    },
-    "MyStateMachine": {
-        "type": "Step Function",
-        "account_name": "aws-1",
-        "invokes": [
-            {
-                "name": "FirstLambdaFunction",
-                "type": "Lambda Function",
-                "account_name": "aws-1"
-            },
-            {
-                "name": "SecondLambdaFunction",
-                "type": "Lambda Function",
-                "account_name": "aws-1"
-            }
-        ],
-        "invoked_by": []
-    },
-    "RoleForTargetLambdas": {
-        "type": "IAM Role",
-        "account_name": "aws-1",
-        "invokes": [],
-        "invoked_by": []
-    },
-    "TargetLambda1": {
-        "type": "Lambda Function",
-        "account_name": "aws-1",
-        "invokes": [],
-        "invoked_by": [
-            {
-                "name": "CallerLambda",
-                "type": "Lambda Function",
-                "account_name": "aws-1"
-            }
-        ]
-    },
-    "TargetLambda2": {
-        "type": "Lambda Function",
-        "account_name": "aws-1",
-        "invokes": [],
-        "invoked_by": [
-            {
-                "name": "CallerLambda",
-                "type": "Lambda Function",
-                "account_name": "aws-1"
-            }
-        ]
-    },
-    "TargetLambda3": {
-        "type": "Lambda Function",
-        "account_name": "aws-1",
-        "invokes": [],
-        "invoked_by": [
-            {
-                "name": "CallerLambda",
-                "type": "Lambda Function",
-                "account_name": "aws-1"
-            }
-        ]
-    },
-    "TargetLambda4": {
-        "type": "Lambda Function",
-        "account_name": "aws-1",
-        "invokes": [],
-        "invoked_by": [
-            {
-                "name": "CallerLambda",
-                "type": "Lambda Function",
-                "account_name": "aws-1"
-            }
-        ]
-    },
-    "RoleForCallerLambda": {
-        "type": "IAM Role",
-        "account_name": "aws-1",
-        "invokes": [],
-        "invoked_by": []
-    },
-    "CallerLambda": {
-        "type": "Lambda Function",
-        "account_name": "aws-1",
-        "invokes": [
-            {
-                "name": "TargetLambda1",
-                "type": "Lambda Function",
-                "account_name": "aws-1"
-            },
-            {
-                "name": "TargetLambda2",
-                "type": "Lambda Function",
-                "account_name": "aws-1"
-            },
-            {
-                "name": "TargetLambda3",
-                "type": "Lambda Function",
-                "account_name": "aws-1"
-            },
-            {
-                "name": "TargetLambda4",
-                "type": "Lambda Function",
-                "account_name": "aws-1"
-            }
-        ],
-        "invoked_by": []
+        "invoked_by": [],
+        "invoked_by_external": []
     }
 }
