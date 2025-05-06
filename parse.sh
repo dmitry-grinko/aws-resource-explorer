@@ -1,16 +1,20 @@
 #!/bin/bash
 
-rm -rf resources.json
+rm -f resources.json
 
-# python cloudformation_parser.py cfn-templates/cfn-1.yml aws-1
-# python cloudformation_parser.py cfn-templates/cfn-2.yml aws-2
-# python cloudformation_parser.py cfn-templates/cfn-3.yml aws-3
-# python cloudformation_parser.py cfn-templates/cfn-4.yml aws-4
-# python cloudformation_parser.py cfn-templates/cfn-5.yml aws-5
-# python cloudformation_parser.py cfn-templates/cfn-6.yml aws-1
-# python cloudformation_parser.py cfn-templates/cfn-7.yml aws-1
-python cloudformation_parser.py cfn-templates/cfn-8.yml aws-1
-python cloudformation_parser.py cfn-templates/cfn-9.yml aws-1
+echo "Parsing CloudFormation templates..."
+python cfn-tmpl-invokes.py cfn-templates/cfn-tmpl-1.yml aws-1
+python cfn-tmpl-invokes.py cfn-templates/cfn-tmpl-2.yml aws-2
+
+if [ ! -f resources.json ]; then
+    echo "Error: resources.json not found after parsing. Aborting."
+    exit 1
+fi
+
+echo "Calculating invoked_by relationships..."
+python cfn-tmpl-invoked-by.py resources.json
 
 
 python test.py
+
+echo "Processing complete."

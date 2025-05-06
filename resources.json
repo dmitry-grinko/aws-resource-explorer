@@ -1,51 +1,246 @@
 {
-    "TDGPlannedOutageMessageHandlerLambdaFunction": {
-        "type": "AWS::Serverless::Function",
+    "Lambda2Role": {
+        "type": "AWS::IAM::Role",
         "account_name": "aws-1",
         "invokes": [],
-        "invoked_by": [],
-        "invoked_by_external": [
-            "S3"
-        ]
+        "invoked_by": []
     },
-    "LambdaInvokePermission": {
-        "type": "AWS::Lambda::Permission",
-        "account_name": "aws-1",
-        "invokes": [],
-        "invoked_by": [],
-        "invoked_by_external": []
-    },
-    "TDGPlannedOutageSendReportLambda": {
-        "type": "AWS::Serverless::Function",
-        "account_name": "aws-1",
-        "invokes": [],
-        "invoked_by": [
-            {
-                "name": "TDGPlannedOutageSendReportSQS",
-                "type": "AWS::SQS::Queue",
-                "account_name": "aws-1"
-            }
-        ],
-        "invoked_by_external": []
-    },
-    "TDGPlannedOutageSendReportSQS": {
-        "type": "AWS::SQS::Queue",
+    "MainApiGateway": {
+        "type": "AWS::ApiGateway::RestApi",
         "account_name": "aws-1",
         "invokes": [
             {
-                "name": "TDGPlannedOutageSendReportLambda",
+                "name": "Lambda1Function",
                 "type": "AWS::Serverless::Function",
                 "account_name": "aws-1"
             }
         ],
-        "invoked_by": [],
-        "invoked_by_external": []
+        "invoked_by": []
     },
-    "TDGPlannedOutageSendReportSQSEventPolicy": {
-        "type": "AWS::SQS::QueuePolicy",
+    "Lambda2Function": {
+        "type": "AWS::Serverless::Function",
+        "account_name": "aws-1",
+        "invokes": [
+            {
+                "name": "ProcessingQueue",
+                "type": "AWS::SQS::Queue",
+                "account_name": "aws-1"
+            }
+        ],
+        "invoked_by": [
+            {
+                "name": "EventBridge",
+                "type": "EventBridge Service",
+                "account_name": "AWS"
+            },
+            {
+                "name": "Lambda1Function",
+                "type": "AWS::Serverless::Function",
+                "account_name": "aws-1"
+            },
+            {
+                "name": "MainStateMachine",
+                "type": "AWS::StepFunctions::StateMachine",
+                "account_name": "aws-1"
+            }
+        ]
+    },
+    "ProcessingQueue": {
+        "type": "AWS::SQS::Queue",
         "account_name": "aws-1",
         "invokes": [],
-        "invoked_by": [],
-        "invoked_by_external": []
+        "invoked_by": [
+            {
+                "name": "Lambda2Function",
+                "type": "AWS::Serverless::Function",
+                "account_name": "aws-1"
+            }
+        ]
+    },
+    "Lambda1Role": {
+        "type": "AWS::IAM::Role",
+        "account_name": "aws-1",
+        "invokes": [],
+        "invoked_by": []
+    },
+    "DataTable": {
+        "type": "AWS::DynamoDB::Table",
+        "account_name": "aws-1",
+        "invokes": [],
+        "invoked_by": [
+            {
+                "name": "Lambda1Function",
+                "type": "AWS::Serverless::Function",
+                "account_name": "aws-1"
+            }
+        ]
+    },
+    "MainStateMachine": {
+        "type": "AWS::StepFunctions::StateMachine",
+        "account_name": "aws-1",
+        "invokes": [
+            {
+                "name": "Lambda1Function",
+                "type": "AWS::Serverless::Function",
+                "account_name": "aws-1"
+            },
+            {
+                "name": "Lambda2Function",
+                "type": "AWS::Serverless::Function",
+                "account_name": "aws-1"
+            }
+        ],
+        "invoked_by": [
+            {
+                "name": "Lambda1Function",
+                "type": "AWS::Serverless::Function",
+                "account_name": "aws-1"
+            }
+        ]
+    },
+    "EventBridge": {
+        "type": "EventBridge Service",
+        "account_name": "AWS",
+        "invokes": [
+            {
+                "name": "Lambda2Function",
+                "type": "AWS::Serverless::Function",
+                "account_name": "aws-1"
+            }
+        ],
+        "invoked_by": []
+    },
+    "DeadLetterQueue": {
+        "type": "AWS::SQS::Queue",
+        "account_name": "aws-1",
+        "invokes": [],
+        "invoked_by": []
+    },
+    "Lambda1Function": {
+        "type": "AWS::Serverless::Function",
+        "account_name": "aws-1",
+        "invokes": [
+            {
+                "name": "DataTable",
+                "type": "AWS::DynamoDB::Table",
+                "account_name": "aws-1"
+            },
+            {
+                "name": "Lambda2Function",
+                "type": "AWS::Serverless::Function",
+                "account_name": "aws-1"
+            },
+            {
+                "name": "MainStateMachine",
+                "type": "AWS::StepFunctions::StateMachine",
+                "account_name": "aws-1"
+            }
+        ],
+        "invoked_by": [
+            {
+                "name": "MainApiGateway",
+                "type": "AWS::ApiGateway::RestApi",
+                "account_name": "aws-1"
+            },
+            {
+                "name": "MainStateMachine",
+                "type": "AWS::StepFunctions::StateMachine",
+                "account_name": "aws-1"
+            }
+        ]
+    },
+    "StateMachineRole": {
+        "type": "AWS::IAM::Role",
+        "account_name": "aws-1",
+        "invokes": [],
+        "invoked_by": []
+    },
+    "Lambda4Function": {
+        "type": "AWS::Serverless::Function",
+        "account_name": "aws-2",
+        "invokes": [
+            {
+                "name": "NotificationTopic",
+                "type": "AWS::SNS::Topic",
+                "account_name": "aws-2"
+            }
+        ],
+        "invoked_by": [
+            {
+                "name": "Lambda3Function",
+                "type": "AWS::Serverless::Function",
+                "account_name": "aws-2"
+            }
+        ]
+    },
+    "Lambda5Role": {
+        "type": "AWS::IAM::Role",
+        "account_name": "aws-2",
+        "invokes": [],
+        "invoked_by": []
+    },
+    "Lambda4Role": {
+        "type": "AWS::IAM::Role",
+        "account_name": "aws-2",
+        "invokes": [],
+        "invoked_by": []
+    },
+    "Lambda5Function": {
+        "type": "AWS::Serverless::Function",
+        "account_name": "aws-2",
+        "invokes": [],
+        "invoked_by": [
+            {
+                "name": "NotificationTopic",
+                "type": "AWS::SNS::Topic",
+                "account_name": "aws-2"
+            }
+        ]
+    },
+    "SQSEventSourceMapping": {
+        "type": "AWS::Lambda::EventSourceMapping",
+        "account_name": "aws-2",
+        "invokes": [],
+        "invoked_by": []
+    },
+    "NotificationTopic": {
+        "type": "AWS::SNS::Topic",
+        "account_name": "aws-2",
+        "invokes": [
+            {
+                "name": "Lambda5Function",
+                "type": "AWS::Serverless::Function",
+                "account_name": "aws-2"
+            }
+        ],
+        "invoked_by": [
+            {
+                "name": "Lambda4Function",
+                "type": "AWS::Serverless::Function",
+                "account_name": "aws-2"
+            }
+        ]
+    },
+    "Lambda3Role": {
+        "type": "AWS::IAM::Role",
+        "account_name": "aws-2",
+        "invokes": [
+
+        ],
+        "invoked_by": [
+            
+        ]
+    },
+    "Lambda3Function": {
+        "type": "AWS::Serverless::Function",
+        "account_name": "aws-2",
+        "invokes": [
+            {
+                "name": "Lambda4Function",
+                "type": "AWS::Serverless::Function",
+                "account_name": "aws-2"
+            }
+        ],
+        "invoked_by": []
     }
 }
